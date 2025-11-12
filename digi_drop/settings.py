@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'cloudinary_storage',
+    'cloudinary',
     'main.apps.MainConfig',
     'rest_framework',
     'drf_yasg',
@@ -76,6 +78,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': env('CLOUD_NAME'),
+    'API_KEY': env('CLOUDINARY_API_KEY'),
+    'API_SECRET': env('CLOUDIANRY_API_SECRET')
+}
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -174,7 +182,8 @@ DEFAULT_FROM_EMAIL="support@digidrop.com"
 SITE_ID=1
 SITE_NAME="Digidrop"
 STATIC_ROOT = BASE_DIR / "staticfiles" 
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 BSC_RPC=env("BSC_RPC_URL")
 CONTRACT_ADDRESS=env("CONTRACT_ADDR")

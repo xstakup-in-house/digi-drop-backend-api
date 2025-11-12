@@ -14,7 +14,7 @@ schema_view = get_schema_view(
       license=openapi.License(name="BSD License"),
    ),
    public=True,
-   url="http://localhost:8000/api/v1/",
+   url="http://backend.digidrop.xyz/api/v1/",
    permission_classes=(permissions.AllowAny,),
 )
 
