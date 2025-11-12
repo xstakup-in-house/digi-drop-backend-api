@@ -1,0 +1,19 @@
+
+{% load i18n %}
+
+{% block subject %}
+{% blocktrans %}Password Reset Request{% endblocktrans %}
+{% endblock subject %}
+
+{% block html_body %}
+<div style="display: flex; flex-direction: column; justify-content: center; width: 100%; height: 80%;">
+<p>You're receiving this email because you request to reset your password on {{ site_name }}</p>
+
+<p>{% trans "Please click the link below to request your password:" %}</p>
+<p><a href="{{ protocol }}://{{ domain }}{{ url|safe }}" style="text-align: center; padding: 5px 8px; box-sizing: border-box; background-color: blueviolet; color: white;">click to reset your password</a></p>
+
+<p>{% trans "Thanks for using our site!" %}</p>
+
+<p>{% blocktrans %}The {{ site_name }} team{% endblocktrans %}</p>
+</div>
+{% endblock html_body %}
