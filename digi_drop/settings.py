@@ -21,7 +21,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["134.122.104.30", ".digidrops.xyz" "localhost"]
 
 
 # Application definition
@@ -37,11 +37,13 @@ INSTALLED_APPS = [
     'main.apps.MainConfig',
     'rest_framework',
     'drf_yasg',
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -69,6 +71,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'digi_drop.wsgi.application'
 
+CORS_ALLOWED_ORIGINS = [
+    "https://digidrops.xyz",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -166,6 +173,8 @@ DEFAULT_FROM_EMAIL="support@digidrop.com"
 
 SITE_ID=1
 SITE_NAME="Digidrop"
+STATIC_ROOT = BASE_DIR / "staticfiles" 
+MEDIA_ROOT = BASE_DIR / 'media'
 
 BSC_RPC=env("BSC_RPC_URL")
 CONTRACT_ADDRESS=env("CONTRACT_ADDR")

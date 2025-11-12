@@ -72,7 +72,7 @@ class WalletLoginView(views.APIView):
             profile.save()
         refresh = RefreshToken.for_user(user)
         del request.session['wallet_nonce']  # Clear nonce
-        return response.Response({'token': str(refresh.access_token), 'isNewUser': created})
+        return response.Response({'token': str(refresh.access_token),'refresh': str(refresh),'isNewUser': created})
 
 # # Create your views here.
 
