@@ -46,7 +46,6 @@ pydantic_core==2.33.2
 PyJWT==2.9.0
 pytz==2025.2
 pyunormalize==16.0.0
-pywin32==311
 PyYAML==6.0.2
 referencing==0.36.2
 regex==2025.9.1

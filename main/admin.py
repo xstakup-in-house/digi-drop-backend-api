@@ -22,7 +22,7 @@ class UserTaskCompletionAdmin(admin.ModelAdmin):
 
 @admin.register(DigiPass)
 class DigiPassAdmin(admin.ModelAdmin):
-    list_display = ('name', 'usd_price', 'point_power')
+    list_display = ('pass_id','name', 'usd_price', 'point_power')
     actions = ['sync_to_contract']
 
     def sync_to_contract(self, request, queryset):
@@ -44,12 +44,21 @@ class DigiPassAdmin(admin.ModelAdmin):
             price_bnb = price_bnb * Decimal('1.05')
             price_wei = w3.to_wei(float(price_bnb), 'ether')  # 5% buffer for fluctuations
             points = pass_obj.point_power
-            tx = contract.functions.setPassDetails(pass_id, price_wei, points).build_transaction({
-                'from': owner_account.address,
+            pass_type=pass_obj.pass_type
+            # NEW: 4 arguments including name
+            tx = contract.functions.setPassDetails(pass_id, pass_type, price_wei, points).build_transaction({
+                'chainId': 97,
                 'nonce': w3.eth.get_transaction_count(owner_account.address),
-                'gas': 200000,
-                'gasPrice': w3.to_wei('0.73', 'gwei'),  # Average as of Nov 2025
+                'gas': 300000,
+                'gasPrice': w3.to_wei('0.73', 'gwei'),
+                'from': owner_account.address,
             })
+
             signed_tx = owner_account.sign_transaction(tx)
             tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
             self.message_user(request, f'Synced {pass_obj.name} (Tx: {tx_hash.hex()})')
+            
+            
+
+       
+    
