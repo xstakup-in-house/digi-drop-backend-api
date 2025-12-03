@@ -73,6 +73,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'digi_drop.wsgi.application'
 
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://digidrops.xyz",
     "http://localhost:3000",

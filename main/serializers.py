@@ -41,6 +41,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model=Profile
         fields = ["id", "names", "email", "scored_point", "rank", "referral_count", "has_pass", "wallet_addr", "referral_code"]
 
+
+class PaymentVerifySerializer(serializers.Serializer):
+    txHash = serializers.CharField()
+    passId = serializers.IntegerField()
+    is_upgrade = serializers.BooleanField(default=False)
+
+    
         
 class PassPaymentSerializer(serializers.ModelSerializer):
     class Meta:
