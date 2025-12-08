@@ -9,7 +9,7 @@ from decimal import Decimal
 from .permissions import HasPassPermission
 from rest_framework import generics, response, permissions, status, views
 from .serializers import  DigiPassSerializer, LeaderboardSerializer, UpdateProfileSerializer, UserProfileSerializer, TaskSerializer, UserTaskCompletionSerializer
-from .models import DigiUser, DigiPass, PassTransaction,Profile, Task, UserTaskCompletion
+from .models import DigiUser, DigiPass,LoginNonce, PassTransaction,Profile, Task, UserTaskCompletion
 from rest_framework_simplejwt.tokens import RefreshToken
 from .utils import  get_bnb_usd_price
 
@@ -23,19 +23,29 @@ class WalletLoginView(views.APIView):
     def get(self, request):
         # Generate nonce for signing (valid for 5 minutes)
         nonce = get_random_string(32)
-        timestamp = int(time.time())
-        request.session['wallet_nonce'] = {'nonce': nonce, 'timestamp': timestamp}
-        return response.Response({'nonce': nonce, 'message': f"Login to Digidrop: {nonce}"})
+        LoginNonce.objects.create(nonce=nonce)
+        message = f"Login to Digidrop: {nonce}"
+        return response.Response({'nonce': nonce, 'message': message}, status=status.HTTP_200_OK)
     
     def post(self, request):  
-        wallet_address = request.data.get('walletAddress', '').lower()
+        wallet_address = request.data.get('walletAddress', '').strip().lower()
         signature = request.data.get('signature')
-        session_nonce = request.session.get('wallet_nonce')
+        nonce_str = request.data.get('nonce')
+        
         user_ref = request.data.get('preferral')  # From frontend
-        if not session_nonce or int(time.time()) - session_nonce['timestamp'] > 300:
-            return response.Response({'error': 'Invalid or expired nonce'}, status=status.HTTP_400_BAD_REQUEST)
 
-        message = f"Login to Digidrop: {session_nonce['nonce']}"
+        if not all([wallet_address, signature, nonce_str]):
+            return response.Response({'error': 'Missing fields'}, status=400)
+        
+        try:
+            nonce_obj = LoginNonce.objects.get(nonce=nonce_str)
+            if nonce_obj.used or nonce_obj.is_expired():
+                return response.Response({'error': 'Invalid or expired nonce'}, status=400)
+        except LoginNonce.DoesNotExist:
+            return response.Response({'error': 'Invalid nonce'}, status=400)
+
+        # Verify signature
+        message = f"Login to Digidrop: {nonce_str}"
 
         # Step 1: Validate address format
         w3 = Web3()
@@ -49,14 +59,19 @@ class WalletLoginView(views.APIView):
         try:
             encoded_msg = encode_defunct(text=message)
             recovered_address = w3.eth.account.recover_message(encoded_msg, signature=signature)
-            if recovered_address.lower() != wallet_address:
+            if recovered_address.lower() != wallet_address.lower():
                 return response.Response({'error': 'Signature mismatch'}, status=status.HTTP_400_BAD_REQUEST)
         
         except Exception:
             return response.Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
 
+        nonce_obj.used = True
+        nonce_obj.save()
         # Create/find user
-        user, created = DigiUser.objects.get_or_create(wallet_address=wallet_address)
+        user, created = DigiUser.objects.get_or_create(
+            wallet_address__iexact=wallet_address,
+            defaults={'wallet_address': wallet_address}
+            )
         if created and user_ref:
             referrer = DigiUser.objects.filter(profile__referral_code=user_ref).first()
             if referrer:
@@ -71,10 +86,8 @@ class WalletLoginView(views.APIView):
             profile.last_login_date = today
             profile.save()
         refresh = RefreshToken.for_user(user)
-        del request.session['wallet_nonce']  # Clear nonce
-        return response.Response({'token': str(refresh.access_token),'refresh': str(refresh),'isNewUser': created})
+        return response.Response({'token': str(refresh.access_token),'refresh': str(refresh),'isNewUser': created}, status=status.HTTP_200_OK)
 
-# # Create your views here.
 
 
 class PassListEndpoint(generics.ListAPIView):

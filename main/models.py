@@ -1,5 +1,7 @@
 import uuid
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 from django.utils.translation import gettext_lazy as _
 from .manager import UserManager
 from django.contrib.auth.models import AbstractBaseUser
@@ -36,6 +38,17 @@ class DigiUser(AbstractBaseUser):
     def __str__(self):
         return self.wallet_address
 
+
+class LoginNonce(models.Model):
+    nonce = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+    def is_expired(self):
+        return timezone.now() - self.created_at > timedelta(minutes=5)
+
+    def __str__(self):
+        return f"{self.nonce[:8]}... ({'used' if self.used else 'fresh'})"
 
 class DigiPass(models.Model):
     pass_id = models.AutoField(primary_key=True)
