@@ -186,6 +186,6 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = '/media/'
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
-BSC_RPC=env("BSC_RPC_URL")
+BSC_RPC=env("BSC_RPC_DEV_URL")
 CONTRACT_ADDRESS=env("CONTRACT_ADDR")
 PRIVATE_KEY=env('PRIVATE_KEY')

@@ -33,14 +33,40 @@ class DigiPassSerializer(serializers.ModelSerializer):
         return (obj.usd_price / bnb_usd).quantize(Decimal("0.00000001"))
     
 
-class UserProfileSerializer(serializers.ModelSerializer):
-    rank = serializers.IntegerField(read_only=True)
-    referral_count = serializers.IntegerField(read_only=True)
-    wallet_addr = serializers.CharField(source="user.wallet_address")
-    class Meta:
-        model=Profile
-        fields = ["id", "names", "email", "scored_point", "rank", "referral_count", "has_pass", "wallet_addr", "referral_code"]
+# class UserProfileSerializer(serializers.ModelSerializer):
+#     rank = serializers.IntegerField(read_only=True)
+#     referral_count = serializers.IntegerField(read_only=True)
+#     wallet_addr = serializers.CharField(source="user.wallet_address")
+#     current_pass_id = serializers.SerializerMethodField()
+#     class Meta:
+#         model=Profile
+#         fields = ["id", "names", "email", "scored_point", "rank", "referral_count", "has_pass", "wallet_addr", "current_pass_id", "referral_code"]
 
+#     def get_current_pass_id(self, obj):
+#         user = obj.user
+        
+#         # Get latest verified or minted pass
+#         tx = (
+#             user.pass_transactions.filter(is_verified=True, minted=True)
+#             .order_by("-created_at").first())
+
+#         if tx and tx.digipass:
+#             return tx.digipass.id
+#         return None
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    wallet_addr = serializers.CharField(source="user.wallet_address")
+    current_pass_id = serializers.IntegerField(source="current_pass.id", read_only=True)
+    current_pass_power = serializers.IntegerField(source="current_pass.point_power", read_only=True)
+    class Meta:
+        model = Profile
+        fields = ["id", "names", "email", "has_pass", "wallet_addr", "current_pass_id", "current_pass_power", "referral_code"]
+
+class UserProfileStatsSerializer(serializers.Serializer):
+    points = serializers.IntegerField()
+    rank = serializers.IntegerField()
+    referral_count = serializers.IntegerField()
 
 class PaymentVerifySerializer(serializers.Serializer):
     txHash = serializers.CharField()
