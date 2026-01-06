@@ -1,15 +1,19 @@
 import requests
-from .models import DigiUser
+from web3 import Web3
+from .models import DigiUser, PassTransaction, DigiPass
 from decimal import Decimal
+from django.db import transaction
 from django.core.cache import cache
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_encode
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
 
-# utils/prices.py
+
+
+
 
 
 
@@ -33,7 +37,6 @@ def get_bnb_usd_price() -> Decimal:
     cache.set("bnb_usd_price", str(price_usd), timeout=180)
     return price_usd
 
-
 def send_email(subject, html_message, email):
     email = EmailMessage(
                 subject.replace('\n', '').replace('\r', ''),
@@ -43,7 +46,6 @@ def send_email(subject, html_message, email):
             )
     email.content_subtype = "html" 
     email.send()
-
 
 def send_email_verification_link(user_id):
     user = DigiUser.objects.get(id=user_id)
@@ -61,8 +63,6 @@ def send_email_verification_link(user_id):
     email_subject=f"Email Verification for {settings.SITE_NAME}"
     email_html_message = render_to_string('email_template.html', context)
     send_email(email_subject, email_html_message, user)
-
-
 
 def send_reset_password_email(user_id):
     user = DigiUser.objects.get(id=user_id)

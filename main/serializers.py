@@ -9,9 +9,18 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         fields = ["id", "names", "email"]
         
 class TaskSerializer(serializers.ModelSerializer):
+    user_status = serializers.SerializerMethodField()
     class Meta:
         model = Task
-        fields = '__all__'
+        fields = ["id", "title", "description", "points", "icon", "task_type", "external_link" ,"is_active", "user_status"]
+
+    def get_user_status(self, task):
+        user = self.context["request"].user
+        try:
+            user_task = UserTaskCompletion.objects.get(user=user, task=task)
+            return user_task.status
+        except UserTaskCompletion.DoesNotExist:
+            return UserTaskCompletion.Status.PENDING
 
 class UserTaskCompletionSerializer(serializers.ModelSerializer):
     task = TaskSerializer(read_only=True)
@@ -57,7 +66,7 @@ class DigiPassSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     wallet_addr = serializers.CharField(source="user.wallet_address")
-    current_pass_id = serializers.IntegerField(source="current_pass.id", read_only=True)
+    current_pass_id = serializers.CharField(source="current_pass.id", read_only=True)
     current_pass_power = serializers.IntegerField(source="current_pass.point_power", read_only=True)
     class Meta:
         model = Profile

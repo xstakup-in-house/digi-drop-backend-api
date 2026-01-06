@@ -111,9 +111,11 @@ class PassTransaction(models.Model):
 
 
 class Task(models.Model):
+
     title = models.CharField(max_length=200)
     description = models.TextField()
     points = models.PositiveIntegerField(default=10)
+    icon = models.CharField(max_length=20, null=True, blank=True)
     task_type = models.CharField(max_length=50, choices=[('on_site', 'On-Site'), ('off_site', 'Off-Site')])  # e.g., 'complete_profile', 'follow_instagram'
     external_link = models.URLField(blank=True, null=True)  # For off-site, e.g., Instagram URL
     is_active = models.BooleanField(default=True)
@@ -122,10 +124,20 @@ class Task(models.Model):
         return self.title
     
 class UserTaskCompletion(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        STARTED = 'started', 'Started'
+        COMPLETED = 'completed', 'Completed'
     user = models.ForeignKey(DigiUser, on_delete=models.CASCADE, related_name="task_completions")
     task = models.ForeignKey(Task, on_delete=models.CASCADE)
-    completed_at = models.DateTimeField(auto_now_add=True)
-    awarded_points = models.PositiveIntegerField()  # Snapshot of points at completion
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    awarded_points = models.PositiveIntegerField(default=0)  # Snapshot of points at completion
 
     class Meta:
         unique_together = ('user', 'task')  # Prevent duplicates
