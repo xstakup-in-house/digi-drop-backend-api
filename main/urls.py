@@ -13,4 +13,5 @@ urlpatterns=[
     path('tasks/<int:task_id>/start', StartTaskView.as_view(), name="start-task"),
     path('tasks/<int:task_id>/completed', CompleteTaskView.as_view(), name="task-completion"),
     path('leaderboard/', LeaderboardView.as_view(), name='leaderboard'),
+    path('/webhooks/moralis', moralis_webhook),
 ]

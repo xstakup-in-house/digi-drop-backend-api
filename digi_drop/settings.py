@@ -1,6 +1,6 @@
 import os
-from pathlib import Path
 import environ
+from pathlib import Path
 from datetime import timedelta
 
 
@@ -189,3 +189,22 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 BSC_RPC=env("BSC_RPC_DEV_URL")
 CONTRACT_ADDRESS=env("CONTRACT_ADDR")
 PRIVATE_KEY=env('PRIVATE_KEY')
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "blockchain.listener": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+    },
+}
+
+MORALIS_WEBHOOK_SECRET =env("WEBHOOK_SECRET", default="")

@@ -145,3 +145,18 @@ class UserTaskCompletion(models.Model):
     def __str__(self):
         return f"{self.user} completed {self.task}"
     
+
+class BlockchainListenerState(models.Model):
+    """
+    Stores the last processed block for a given listener.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    last_processed_block = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} @ block {self.last_processed_block}"
+
+
+
+    

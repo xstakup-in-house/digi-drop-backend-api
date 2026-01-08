@@ -1,10 +1,14 @@
 from django.shortcuts import get_object_or_404
+from django.http import JsonResponse, HttpResponseForbidden
 from django.utils import timezone
 from datetime import date
 from django.conf import settings
-from django.db import transaction, IntegrityError
 from web3 import Web3
 import json
+import hmac
+import hashlib
+from main.services.pass_verifier import (handle_pass_minted,handle_pass_upgraded)
+from django.views.decorators.csrf import csrf_exempt
 from django.db.models import F, Window,Max
 from django.db.models.functions import Rank
 from eth_account.messages import encode_defunct
@@ -15,7 +19,7 @@ from rest_framework import generics, response, permissions, status, views
 from .serializers import  DigiPassSerializer, LeaderboardSerializer, UpdateProfileSerializer, UserProfileSerializer, TaskSerializer, UserTaskCompletionSerializer
 from .models import DigiUser, DigiPass,LoginNonce, PassTransaction,Profile, Task, UserTaskCompletion
 from rest_framework_simplejwt.tokens import RefreshToken
-from .utils import  get_bnb_usd_price
+
 
 
 BSC_RPC = settings.BSC_RPC  
@@ -130,7 +134,7 @@ class UserProfileStatsView(views.APIView):
                     expression=Rank(),
                     order_by=F("scored_point").desc())).values("user_id", "scored_point", "rank"))
 
-        profile_data = qs.get(user__id=request.user.id)
+        profile_data = qs.get(user_id=request.user.id)
 
         # 2️⃣ Get highest score on the platform (rank #1 points)
         highest_score = (
@@ -230,7 +234,36 @@ class UserProfileStatsView(views.APIView):
 #         })
             
 
-        
+def verify_signature(body, signature):
+    secret = settings.MORALIS_WEBHOOK_SECRET.encode()
+    expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature) 
+
+
+@csrf_exempt
+def moralis_webhook(request):  
+    if "x-signature" not in request.headers:
+        return JsonResponse({"status": "ok"}, status=200)
+
+    signature = request.headers.get("X-Signature")
+    body = request.body
+
+    if not signature or not verify_signature(body, signature):
+        return HttpResponseForbidden("Invalid signature")
+
+    payload = json.loads(body)
+
+    # Moralis batches events
+    for event in payload.get("logs", []):
+        event_name = event["decodedEvent"]["label"]
+
+        if event_name == "PassMinted":
+            handle_pass_minted(event)
+
+        elif event_name == "PassUpgraded":
+            handle_pass_upgraded(event)
+
+    return JsonResponse({"status": "ok"})
     
 class TaskListView(generics.ListAPIView):
     permission_classes = [HasPassPermission]
@@ -276,35 +309,7 @@ class StartTaskView(views.APIView):
             "external_link": task.external_link
         }, status=status.HTTP_200_OK)
 
-# class CompleteTaskView(generics.GenericAPIView):
-#     permission_classes = [HasPassPermission]
-
-#     def post(self, request, task_id):
-#         try:
-#             task = Task.objects.get(id=task_id, is_active=True)
-#             if UserTaskCompletion.objects.filter(user=request.user, task=task).exists():
-#                 return response.Response({'error': 'Task already completed'}, status=status.HTTP_400_BAD_REQUEST)
-            
-#             profile = request.user.profile
-#             multiplied_points = task.points * profile.current_pass.point_power
-#             # Verify if on-site (custom logic per task_type/title)
-#             if task.task_type == 'on_site':
-#                 # e.g., if title == "Complete Profile", check profile fields
-#                 profile = request.user.profile
-#                 if task.title == "Complete Your Profile" and not (profile.names and profile.email):
-#                     return response.Response({'error': 'Profile not complete'}, status=status.HTTP_400_BAD_REQUEST)
-           
-#             completion = UserTaskCompletion(user=request.user, task=task, awarded_points=multiplied_points)
-#             completion.save()
-
-#             profile = request.user.profile
-#             profile.scored_point += multiplied_points
-#             profile.save()
-
-#             return response.Response({'success': True, 'awarded_points': multiplied_points})
-#         except Task.DoesNotExist:
-#             return response.Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+   
 
 class CompleteTaskView(views.APIView):
     permission_classes = [HasPassPermission]

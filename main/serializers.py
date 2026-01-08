@@ -66,7 +66,7 @@ class DigiPassSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     wallet_addr = serializers.CharField(source="user.wallet_address")
-    current_pass_id = serializers.CharField(source="current_pass.id", read_only=True)
+    current_pass_id = serializers.UUIDField(source="current_pass.id", read_only=True)
     current_pass_power = serializers.IntegerField(source="current_pass.point_power", read_only=True)
     class Meta:
         model = Profile
