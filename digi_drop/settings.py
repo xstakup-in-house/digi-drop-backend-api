@@ -21,7 +21,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["134.122.104.30", ".digidrops.xyz" "localhost"]
+ALLOWED_HOSTS = ["134.122.104.30", ".digidrops.xyz", "localhost", "127.0.0.1"]
 
 
 # Application definition
@@ -78,6 +78,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://digidrops.xyz",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
 ]
 
 CLOUDINARY_STORAGE = {

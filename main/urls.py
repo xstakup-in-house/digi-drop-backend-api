@@ -8,10 +8,10 @@ urlpatterns=[
     path("profile/stats", UserProfileStatsView.as_view(), name="profile-stats"),
     path('update-profile', UpdateProfileEndpoint.as_view(), name="update-profile"),
     path("passes/<uuid:id>", PassDetailEndpoint.as_view(), name="pass-details"),
-    # path("verify/payment", VerifyPaymentView.as_view(), name="pass-payment-verification"),
+    path("verify/payment", VerifyPaymentView.as_view(), name="pass-payment-verification"),
     path('tasks/', TaskListView.as_view(), name="list_tasks"),
     path('tasks/<int:task_id>/start', StartTaskView.as_view(), name="start-task"),
     path('tasks/<int:task_id>/completed', CompleteTaskView.as_view(), name="task-completion"),
     path('leaderboard/', LeaderboardView.as_view(), name='leaderboard'),
-    path('/webhooks/moralis', moralis_webhook),
+    path('webhooks/moralis', moralis_webhook),
 ]

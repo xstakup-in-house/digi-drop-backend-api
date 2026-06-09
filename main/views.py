@@ -7,9 +7,11 @@ from web3 import Web3
 import json
 import hmac
 import hashlib
+from .utils import get_bnb_usd_price
 from main.services.pass_verifier import (handle_pass_minted,handle_pass_upgraded)
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import F, Window,Max
+from django.db import transaction, IntegrityError
+from django.db.models import F, Window, Max
 from django.db.models.functions import Rank
 from eth_account.messages import encode_defunct
 from django.utils.crypto import get_random_string
@@ -40,7 +42,7 @@ class WalletLoginView(views.APIView):
         signature = request.data.get('signature')
         nonce_str = request.data.get('nonce')
         
-        user_ref = request.data.get('preferral')  # From frontend
+        user_ref = request.data.get('referral')  # From frontend
 
         if not all([wallet_address, signature, nonce_str]):
             return response.Response({'error': 'Missing fields'}, status=400)
@@ -152,86 +154,80 @@ class UserProfileStatsView(views.APIView):
         }, status=status.HTTP_200_OK)
 
 
-# class VerifyPaymentView(generics.GenericAPIView):
-#     permission_classes = [permissions.IsAuthenticated]
+class VerifyPaymentView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-#     def post(self, request):
-#         tx_hash = request.data['txHash']
-#         is_upgrade = request.data.get('isUpgrade', False)
-#         new_pass_id = request.data['newPassId']  
+    def post(self, request):
+        tx_hash = request.data['txHash']
+        is_upgrade = request.data.get('isUpgrade', False)
+        new_pass_id = request.data['newPassId']  
 
-#         bnb_usd = get_bnb_usd_price()
+        bnb_usd = get_bnb_usd_price()
 
-#         w3 = Web3(Web3.HTTPProvider(settings.BSC_RPC))  # Mainnet; use testnet for dev
-#         contract_address = settings.CONTRACT_ADDRESS
-#         with open(settings.BASE_DIR / 'contracts' / 'abi.json') as f:
-#             abi = json.load(f)  # Full ABI from artifacts
-#         contract = w3.eth.contract(address=contract_address, abi=abi)
+        w3 = Web3(Web3.HTTPProvider(settings.BSC_RPC))
+        contract_address = settings.CONTRACT_ADDRESS
+        with open(settings.BASE_DIR / 'contracts' / 'abi.json') as f:
+            abi = json.load(f)
+        contract = w3.eth.contract(address=contract_address, abi=abi)
 
-#         # Get tx receipt and verify
+        tx_receipt = w3.eth.get_transaction_receipt(tx_hash)
+        if tx_receipt.status != 1:
+            return response.Response({'error': 'Mint Transaction failed'}, status=status.HTTP_400_BAD_REQUEST)
         
-#         tx_receipt = w3.eth.get_transaction_receipt(tx_hash)
-#         if tx_receipt.status != 1:
-#             return response.Response({'error': 'Mint Transaction failed'}, status=status.HTTP_400_BAD_REQUEST)
+        tx = w3.eth.get_transaction(tx_hash)
+        if tx['to'].lower() != contract_address.lower():
+            return response.Response({'error': 'Invalid contract address in tx'}, status=status.HTTP_400_BAD_REQUEST)
         
-#         tx = w3.eth.get_transaction(tx_hash)
-#         if tx['to'].lower() != contract_address.lower():
-#             return response.Response({'error': 'Invalid contract address in tx'}, status=status.HTTP_400_BAD_REQUEST)
+        pass_id, points = contract.functions.getUserPass(tx['from']).call()
+        if pass_id != new_pass_id:
+            return response.Response({'error': 'Minted pass ID mismatch'}, status=status.HTTP_400_BAD_REQUEST)
         
-#         # Fetch user's on-chain pass data
-#         pass_id, points = contract.functions.getUserPass(tx['from']).call()
-#         if pass_id != new_pass_id:
-#             return response.Response({'error': 'Minted pass ID mismatch'}, status=status.HTTP_400_BAD_REQUEST)
-        
-#              # 3️⃣ DB writes — atomic & idempotent
-#         try:
-#             with transaction.atomic():
-#                 # If tx already verified, exit cleanly
-#                 existing = PassTransaction.objects.select_for_update().filter(
-#                     tx_hash=tx_hash
-#                 ).first()
+        try:
+            with transaction.atomic():
+                existing = PassTransaction.objects.select_for_update().filter(
+                    tx_hash=tx_hash
+                ).first()
 
-#                 if existing and existing.is_verified:
-#                     return response.Response({"success": True})
+                if existing and existing.is_verified:
+                    return response.Response({"success": True})
 
-#                 digipass = DigiPass.objects.get(pass_id=new_pass_id)
+                digipass = DigiPass.objects.get(pass_id=new_pass_id)
 
-#                 tx_obj = existing or PassTransaction(
-#                     tx_hash=tx_hash,
-#                     user=request.user,
-#                 )
+                tx_obj = existing or PassTransaction(
+                    tx_hash=tx_hash,
+                    user=request.user,
+                )
 
-#                 tx_obj.wallet_address = tx["from"]
-#                 tx_obj.digipass = digipass
-#                 tx_obj.minted = True
-#                 tx_obj.is_verified = True
-#                 tx_obj.amount_paid_bnb = Decimal(
-#                     w3.from_wei(tx["value"], "ether")
-#                 )
-#                 tx_obj.usd_price = digipass.usd_price
-#                 tx_obj.is_upgrade = is_upgrade
-#                 tx_obj.save()
+                tx_obj.wallet_address = tx["from"]
+                tx_obj.digipass = digipass
+                tx_obj.minted = True
+                tx_obj.is_verified = True
+                tx_obj.amount_paid_bnb = Decimal(
+                    w3.from_wei(tx["value"], "ether")
+                )
+                tx_obj.usd_price = digipass.usd_price
+                tx_obj.is_upgrade = is_upgrade
+                tx_obj.save()
 
-#                 profile = request.user.profile
-#                 profile.current_pass = digipass
-#                 profile.has_pass = True
-#                 profile.save(update_fields=["current_pass", "has_pass"])
-#                 if profile.referred_by:
-#                     referrer_profile = profile.referred_by.profile
-#                     base_referral_points = 10
-#                     multiplied_points = base_referral_points * referrer_profile.current_pass_power
-#                     referrer_profile.scored_point += multiplied_points  
-#                     referrer_profile.save()
-#         except IntegrityError:
-#             # tx_hash uniqueness race condition
-#             return response.Response({"success": True})
+                profile = request.user.profile
+                profile.current_pass = digipass
+                profile.has_pass = True
+                profile.save(update_fields=["current_pass", "has_pass"])
+                if profile.referred_by:
+                    referrer_profile = profile.referred_by.profile
+                    base_referral_points = 10
+                    multiplied_points = base_referral_points * referrer_profile.current_pass.point_power
+                    referrer_profile.scored_point += multiplied_points  
+                    referrer_profile.save()
+        except IntegrityError:
+            return response.Response({"success": True})
 
-#         return response.Response({
-#             "success": True,
-#             "pass_id": pass_id,
-#             "points": points,
-#             "tx_hash": tx_hash,
-#         })
+        return response.Response({
+            "success": True,
+            "pass_id": pass_id,
+            "points": points,
+            "tx_hash": tx_hash,
+        })
             
 
 def verify_signature(body, signature):
