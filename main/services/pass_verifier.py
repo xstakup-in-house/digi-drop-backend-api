@@ -41,6 +41,10 @@ def handle_pass_minted(event):
         )
 
         profile = user.profile
+        if profile.referred_by and not profile.has_pass:
+            from main.utils import award_referral_points
+            award_referral_points(profile)
+
         profile.current_pass = digipass
         profile.has_pass = True
         profile.save(update_fields=["current_pass", "has_pass"])

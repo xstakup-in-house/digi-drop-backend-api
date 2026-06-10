@@ -37,6 +37,7 @@ class DigiPassAdmin(admin.ModelAdmin):
 
         
         bnb_usd = get_bnb_usd_price()
+        nonce = w3.eth.get_transaction_count(owner_account.address)
 
         for pass_obj in queryset:
             pass_id = pass_obj.pass_id  # Use new integer field
@@ -48,7 +49,7 @@ class DigiPassAdmin(admin.ModelAdmin):
             # NEW: 4 arguments including name
             tx = contract.functions.setPassDetails(pass_id, pass_type, price_wei, points).build_transaction({
                 'chainId': 97,
-                'nonce': w3.eth.get_transaction_count(owner_account.address),
+                'nonce': nonce,
                 'gas': 300000,
                 'gasPrice': w3.to_wei('0.73', 'gwei'),
                 'from': owner_account.address,
@@ -57,6 +58,7 @@ class DigiPassAdmin(admin.ModelAdmin):
             signed_tx = owner_account.sign_transaction(tx)
             tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
             self.message_user(request, f'Synced {pass_obj.name} (Tx: {tx_hash.hex()})')
+            nonce += 1
             
             
 

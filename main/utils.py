@@ -1,6 +1,6 @@
 import requests
 from web3 import Web3
-from .models import DigiUser, PassTransaction, DigiPass
+from .models import DigiUser, PassTransaction, DigiPass, Profile
 from decimal import Decimal
 from django.db import transaction
 from django.core.cache import cache
@@ -80,3 +80,17 @@ def send_reset_password_email(user_id):
     email_subject=f"Password Reset Request"
     email_html_message = render_to_string('email_reset.html', context)
     send_email(email_subject, email_html_message,  user)
+
+
+def award_referral_points(profile):
+    """
+    Awards referral points to the referrer of the user associated with the given profile.
+    Uses the referrer's current pass point power as a multiplier, defaulting to 1 if no pass is owned.
+    """
+    if profile.referred_by:
+        referrer_profile = profile.referred_by.profile
+        base_referral_points = 10
+        multiplier = getattr(referrer_profile.current_pass, "point_power", 1)
+        multiplied_points = base_referral_points * multiplier
+        referrer_profile.scored_point += multiplied_points
+        referrer_profile.save(update_fields=["scored_point"])
