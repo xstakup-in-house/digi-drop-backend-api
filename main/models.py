@@ -67,6 +67,7 @@ class Profile(models.Model):
     user = models.OneToOneField(DigiUser, related_name="profile", on_delete=models.CASCADE)
     names = models.CharField(max_length=100, null=True, blank=True)
     email = models.EmailField(max_length=200, null=True, blank=True)
+    avatar_url = models.CharField(max_length=200, null=True, blank=True)
     scored_point = models.PositiveBigIntegerField(default=0, db_index=True)
     last_login_date = models.DateField(null=True, blank=True)
     has_pass = models.BooleanField(default=False)

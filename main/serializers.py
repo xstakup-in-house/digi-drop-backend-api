@@ -6,7 +6,7 @@ from .models import DigiPass, PassTransaction, Profile, Task, UserTaskCompletion
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model=Profile
-        fields = ["id", "names", "email"]
+        fields = ["id", "names", "email", "avatar_url"]
         
 class TaskSerializer(serializers.ModelSerializer):
     user_status = serializers.SerializerMethodField()
@@ -70,7 +70,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     current_pass_power = serializers.IntegerField(source="current_pass.point_power", read_only=True)
     class Meta:
         model = Profile
-        fields = ["id", "names", "email", "has_pass", "wallet_addr", "current_pass_id", "current_pass_power", "referral_code"]
+        fields = ["id", "names", "email", "avatar_url", "has_pass", "wallet_addr", "current_pass_id", "current_pass_power", "referral_code"]
 
 class UserProfileStatsSerializer(serializers.Serializer):
     points = serializers.IntegerField()

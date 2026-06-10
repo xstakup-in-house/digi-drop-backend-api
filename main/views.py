@@ -210,15 +210,13 @@ class VerifyPaymentView(generics.GenericAPIView):
                 tx_obj.save()
 
                 profile = request.user.profile
+                if profile.referred_by and not profile.has_pass:
+                    from .utils import award_referral_points
+                    award_referral_points(profile)
+
                 profile.current_pass = digipass
                 profile.has_pass = True
                 profile.save(update_fields=["current_pass", "has_pass"])
-                if profile.referred_by:
-                    referrer_profile = profile.referred_by.profile
-                    base_referral_points = 10
-                    multiplied_points = base_referral_points * referrer_profile.current_pass.point_power
-                    referrer_profile.scored_point += multiplied_points  
-                    referrer_profile.save()
         except IntegrityError:
             return response.Response({"success": True})
 
@@ -318,7 +316,8 @@ class CompleteTaskView(views.APIView):
 
         # Award points
         profile = request.user.profile
-        multiplied_points = user_task.task.points * profile.current_pass.point_power
+        multiplier = getattr(profile.current_pass, "point_power", 1)
+        multiplied_points = user_task.task.points * multiplier
         profile.scored_point += multiplied_points
         profile.save(update_fields=["scored_point"])
 
