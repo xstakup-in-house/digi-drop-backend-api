@@ -7,6 +7,7 @@ from web3 import Web3
 import json
 import hmac
 import hashlib
+import logging
 from .utils import get_bnb_usd_price
 from main.services.pass_verifier import (handle_pass_minted,handle_pass_upgraded)
 from django.views.decorators.csrf import csrf_exempt
@@ -21,6 +22,8 @@ from rest_framework import generics, response, permissions, status, views
 from .serializers import  DigiPassSerializer, LeaderboardSerializer, UpdateProfileSerializer, UserProfileSerializer, TaskSerializer, UserTaskCompletionSerializer
 from .models import DigiUser, DigiPass,LoginNonce, PassTransaction,Profile, Task, UserTaskCompletion
 from rest_framework_simplejwt.tokens import RefreshToken
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -121,11 +124,40 @@ class UserProfileView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return (
+        profile = (
             Profile.objects.select_related("user", "current_pass").get(user=self.request.user)
         )
-    
 
+        # Layer 2 — Self-healing: DB says no pass, but maybe the webhook missed it.
+        # Check the smart contract directly and fix the DB if needed.
+        if not profile.has_pass:
+            self._sync_pass_from_chain(profile)
+
+        return profile
+
+    def _sync_pass_from_chain(self, profile):
+        """Query the BNB Chain contract and heal profile.has_pass if user already minted."""
+        try:
+            wallet = self.request.user.wallet_address
+            w3 = Web3(Web3.HTTPProvider(settings.BSC_RPC))
+            with open(settings.BASE_DIR / 'contracts' / 'abi.json') as f:
+                abi = json.load(f)
+            contract = w3.eth.contract(address=settings.CONTRACT_ADDRESS, abi=abi)
+
+            pass_id, _ = contract.functions.getUserPass(wallet).call()
+
+            if pass_id > 0:
+                digipass = DigiPass.objects.filter(pass_id=pass_id).first()
+                if digipass:
+                    logger.info(
+                        f"[SelfHeal] Healed profile for {wallet}: pass_id={pass_id} found on-chain but missing in DB."
+                    )
+                    profile.has_pass = True
+                    profile.current_pass = digipass
+                    profile.save(update_fields=["has_pass", "current_pass"])
+        except Exception as exc:
+            # Never crash the /profile endpoint over a chain call failure
+            logger.warning(f"[SelfHeal] On-chain check failed for {self.request.user.wallet_address}: {exc}")
     
 class UserProfileStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -214,9 +246,21 @@ class VerifyPaymentView(generics.GenericAPIView):
                     from .utils import award_referral_points
                     award_referral_points(profile)
 
+                # Login points adjustment logic
+                from datetime import date
+                today = date.today()
+                if profile.last_login_date == today:
+                    old_pass = profile.current_pass
+                    old_power = getattr(old_pass, "point_power", 1) if old_pass else 1
+                    new_power = getattr(digipass, "point_power", 1)
+                    if new_power > old_power:
+                        points_to_add = (new_power - old_power) * 10
+                        profile.scored_point += points_to_add
+                        logger.info(f"[VerifyPayment] Adjusted daily login points for {request.user.wallet_address}: +{points_to_add} points (power {old_power} -> {new_power})")
+
                 profile.current_pass = digipass
                 profile.has_pass = True
-                profile.save(update_fields=["current_pass", "has_pass"])
+                profile.save(update_fields=["current_pass", "has_pass", "scored_point"])
         except IntegrityError:
             return response.Response({"success": True})
 
@@ -231,12 +275,23 @@ class VerifyPaymentView(generics.GenericAPIView):
 def verify_signature(body, signature):
     secret = settings.MORALIS_WEBHOOK_SECRET.encode()
     expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature) 
+    result = hmac.compare_digest(expected, signature)
+    if not result:
+        logger.error(
+            f"[Webhook] Signature mismatch. "
+            f"Expected={expected[:16]}... Received={str(signature)[:16]}..."
+        )
+    return result
 
 
 @csrf_exempt
 def moralis_webhook(request):  
     if "x-signature" not in request.headers:
+        # Log so we can detect misconfigured Moralis streams in production
+        logger.warning(
+            "[Webhook] Received Moralis request with NO x-signature header. "
+            "Check that your Moralis stream has a webhook secret configured."
+        )
         return JsonResponse({"status": "ok"}, status=200)
 
     signature = request.headers.get("X-Signature")
