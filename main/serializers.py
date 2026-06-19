@@ -10,9 +10,10 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         
 class TaskSerializer(serializers.ModelSerializer):
     user_status = serializers.SerializerMethodField()
+    started_at = serializers.SerializerMethodField()
     class Meta:
         model = Task
-        fields = ["id", "title", "description", "points", "icon", "task_type", "external_link" ,"is_active", "user_status"]
+        fields = ["id", "title", "description", "points", "icon", "task_type", "external_link" ,"is_active", "user_status", "started_at"]
 
     def get_user_status(self, task):
         user = self.context["request"].user
@@ -21,6 +22,14 @@ class TaskSerializer(serializers.ModelSerializer):
             return user_task.status
         except UserTaskCompletion.DoesNotExist:
             return UserTaskCompletion.Status.PENDING
+
+    def get_started_at(self, task):
+        user = self.context["request"].user
+        try:
+            user_task = UserTaskCompletion.objects.get(user=user, task=task)
+            return user_task.started_at.isoformat() if user_task.started_at else None
+        except UserTaskCompletion.DoesNotExist:
+            return None
 
 class UserTaskCompletionSerializer(serializers.ModelSerializer):
     task = TaskSerializer(read_only=True)
