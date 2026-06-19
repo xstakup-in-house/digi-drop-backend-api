@@ -163,12 +163,11 @@ class UserProfileStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # 1️⃣ Get user's rank + points using window function
-        qs = (Profile.objects.annotate(rank=Window(
-                    expression=Rank(),
-                    order_by=F("scored_point").desc())).values("user_id", "scored_point", "rank"))
+        profile = request.user.profile
+        points = profile.scored_point
 
-        profile_data = qs.get(user_id=request.user.id)
+        # Calculate rank: count profiles with higher scored_points + 1
+        rank = Profile.objects.filter(scored_point__gt=points).count() + 1
 
         # 2️⃣ Get highest score on the platform (rank #1 points)
         highest_score = (
@@ -179,8 +178,8 @@ class UserProfileStatsView(views.APIView):
         referral_count = request.user.referred_users.count()
 
         return response.Response({
-            "point": profile_data["scored_point"],
-            "rank": profile_data["rank"],
+            "point": points,
+            "rank": rank,
             "highest_point": highest_score or 0,
             "referral_count": referral_count,
         }, status=status.HTTP_200_OK)
