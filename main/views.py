@@ -404,4 +404,175 @@ class LeaderboardView(generics.ListAPIView):
             serializer = self.get_serializer(profile, context={'rank': rank})
             data.append(serializer.data)
         return response.Response(data, status=status.HTTP_200_OK)
-    
+
+
+class TestnetOnboardView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        import os
+        import requests
+        from datetime import timedelta
+        from django.core.cache import cache
+        from django.db.models import Q
+        from .models import TestnetApplication
+
+        wallet_address = request.data.get('walletAddress', '').strip().lower()
+        email = request.data.get('email', '').strip().lower()
+
+        if not wallet_address or not email:
+            return response.Response({'error': 'Wallet address and email are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 1: Validate wallet format
+        w3 = Web3()
+        if not w3.is_checksum_address(wallet_address):
+            try:
+                wallet_address = w3.to_checksum_address(wallet_address)
+            except ValueError:
+                return response.Response({'error': 'Invalid wallet address format.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 2: Rate Limiting & Uniqueness Checks
+        if TestnetApplication.objects.filter(wallet_address__iexact=wallet_address).exists():
+            return response.Response({'error': 'This wallet address has already been registered.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if TestnetApplication.objects.filter(email__iexact=email).exists():
+            return response.Response({'error': 'This email address has already been registered.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', '')).split(',')[0].strip()
+        ip_cache_key = f"testnet_ip_{client_ip}"
+        if cache.get(ip_cache_key):
+            return response.Response({'error': 'Too many requests from this IP. Please wait 7 days.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        # Step 3: Programmatic Faucet Dispatch
+        faucet_tx_hash = None
+        faucet_error = None
+        try:
+            w3_bsc = Web3(Web3.HTTPProvider(settings.BSC_RPC))
+            account = w3_bsc.eth.account.from_key(settings.PRIVATE_KEY)
+            nonce = w3_bsc.eth.get_transaction_count(account.address, 'pending')
+            gas_price = w3_bsc.eth.gas_price
+            
+            tx = {
+                'nonce': nonce,
+                'to': wallet_address,
+                'value': w3_bsc.to_wei(0.04, 'ether'),
+                'gas': 21000,
+                'gasPrice': gas_price,
+                'chainId': 97
+            }
+            signed_tx = account.sign_transaction(tx)
+            tx_hash = w3_bsc.eth.send_raw_transaction(signed_tx.raw_transaction)
+            faucet_tx_hash = w3_bsc.to_hex(tx_hash)
+        except Exception as e:
+            faucet_error = str(e)
+            logger.error(f"Faucet transfer failed to {wallet_address}: {e}")
+
+        # Step 4: Save Application
+        app = TestnetApplication.objects.create(
+            community_name=request.data.get('communityName', ''),
+            platform=request.data.get('platform', ''),
+            invite_link=request.data.get('inviteLink', ''),
+            member_count=request.data.get('memberCount', ''),
+            wallet_address=wallet_address,
+            email=email,
+            feedback=request.data.get('feedback', ''),
+            faucet_tx_hash=faucet_tx_hash
+        )
+
+        # Set IP cache rate limit for 7 days
+        cache.set(ip_cache_key, True, timeout=7 * 24 * 60 * 60)
+
+        # Step 5: Send Emails via Resend
+        resend_key = getattr(settings, 'RESEND_API_KEY', os.getenv('RESEND_API_KEY', 're_123456789'))
+        
+        def send_email(subject, html_body, delay_hours=None):
+            headers = {
+                "Authorization": f"Bearer {resend_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "from": "Digidrops Vanguard <pilot@digidrops.xyz>",
+                "to": [email],
+                "subject": subject,
+                "html": html_body
+            }
+            if delay_hours:
+                scheduled_time = timezone.now() + timedelta(hours=delay_hours)
+                payload["scheduled_at"] = scheduled_time.isoformat()
+            
+            try:
+                requests.post("https://api.resend.com/emails", json=payload, headers=headers)
+            except Exception as ex:
+                logger.error(f"Failed to queue email to {email}: {ex}")
+
+        # Footer template with socials
+        footer_html = """
+        <br><br>
+        <hr style="border:0; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="font-size:12px; color:#666;">
+          Follow the Vanguard journey:<br>
+          X/Twitter: <a href="https://x.com/Digidrops_xyz">@Digidrops_xyz</a> | 
+          Telegram: <a href="https://t.me/DigidropsAI">DigidropsAI</a> | 
+          Discord: <a href="https://discord.com/invite/digidropsai">Join Discord</a>
+        </p>
+        """
+
+        # Email 1: Welcome & Faucet Info
+        faucet_msg = f"We have dispatched 0.04 tBNB to your wallet address ({wallet_address}) to cover your passport minting fees. Tx Hash: {faucet_tx_hash or 'Pending'}"
+        if faucet_error:
+            faucet_msg = f"We encountered a temporary network delay dispatching your testnet BNB. Our support pilot will credit your wallet address ({wallet_address}) shortly."
+            
+        email1_body = f"""
+        <h2>Welcome to the Vanguard, Pioneer!</h2>
+        <p>Your testnet application has been received successfully.</p>
+        <p>{faucet_msg}</p>
+        <p>Prepare to explore the future of decentralized intelligence.</p>
+        {footer_html}
+        """
+        send_email("Welcome to the Digidrops Testnet!", email1_body)
+
+        # Email 2: Follow-up (T+48h)
+        email2_body = f"""
+        <h2>Day 2 Vanguard Report</h2>
+        <p>Hope you've successfully touched down and tested the flight deck systems!</p>
+        <p>If you haven't minted your Passport yet, please head over to <a href="https://digidrops.xyz">digidrops.xyz</a> to begin your missions.</p>
+        {footer_html}
+        """
+        send_email("Continuing Your Flight Deck Journey", email2_body, delay_hours=48)
+
+        # Email 3: Week-1 Progress & Feedback (T+7d)
+        email3_body = f"""
+        <h2>Week 1 Check-In: Requesting Pilot Feedback</h2>
+        <p>You've been in orbit for a week! We'd love to hear your feedback on the onboarding experience, UI responsiveness, or the passport system.</p>
+        <p>Please reply to this email or contact the Chief Pilot directly at <a href="mailto:chiefpilot@digidrops.xyz">chiefpilot@digidrops.xyz</a> if you need anything.</p>
+        {footer_html}
+        """
+        send_email("Vanguard Week-1 Check-In & Feedback", email3_body, delay_hours=168)
+
+        return response.Response({
+            'success': True,
+            'faucet_tx_hash': faucet_tx_hash,
+            'message': 'Onboarding coordinates recorded successfully.'
+        }, status=status.HTTP_201_CREATED)
+
+
+class GlobalStatsView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from django.db.models import Sum
+        from django.utils import timezone
+        from datetime import datetime, time
+        total_users = DigiUser.objects.count()
+        total_passes = Profile.objects.filter(has_pass=True).count()
+        total_points = Profile.objects.aggregate(sum_points=Sum('scored_point'))['sum_points'] or 0
+        
+        today_start = timezone.make_aware(datetime.combine(timezone.now().date(), time.min))
+        minted_today = PassTransaction.objects.filter(minted=True, created_at__gte=today_start).count()
+
+        return response.Response({
+            'total_users': total_users,
+            'total_passes': total_passes,
+            'total_points': total_points,
+            'minted_today': minted_today
+        }, status=200)

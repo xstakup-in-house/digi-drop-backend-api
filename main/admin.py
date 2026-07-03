@@ -6,9 +6,9 @@ from django.contrib import admin
 from web3 import Web3
 
 from .utils import get_bnb_usd_price
-from .models import DigiPass, DigiUser, Profile, PassTransaction,Task, UserTaskCompletion
+from .models import DigiPass, DigiUser, Profile, PassTransaction, Task, UserTaskCompletion, TestnetApplication
 
-admin.site.register([DigiUser, Profile, PassTransaction])
+admin.site.register([DigiUser, Profile, PassTransaction, TestnetApplication])
 
 
 @admin.register(Task)
