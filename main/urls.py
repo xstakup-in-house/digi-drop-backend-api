@@ -14,4 +14,6 @@ urlpatterns=[
     path('tasks/<int:task_id>/completed', CompleteTaskView.as_view(), name="task-completion"),
     path('leaderboard/', LeaderboardView.as_view(), name='leaderboard'),
     path('webhooks/moralis', moralis_webhook),
+    path('testnet/onboard/', TestnetOnboardView.as_view(), name='testnet-onboard'),
+    path('stats/', GlobalStatsView.as_view(), name='global-stats'),
 ]

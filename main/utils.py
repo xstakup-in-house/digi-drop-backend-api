@@ -1,8 +1,6 @@
 import requests
-from web3 import Web3
-from .models import DigiUser, PassTransaction, DigiPass, Profile
+from .models import DigiUser, Profile
 from decimal import Decimal
-from django.db import transaction
 from django.core.cache import cache
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
@@ -10,13 +8,6 @@ from django.utils.http import urlsafe_base64_encode
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
-
-
-
-
-
-
-
 
 COINLORE_API = "https://api.coinlore.net/api/ticker/?id=2710"  # 2710 = BNB
 
@@ -86,11 +77,16 @@ def award_referral_points(profile):
     """
     Awards referral points to the referrer of the user associated with the given profile.
     Uses the referrer's current pass point power as a multiplier, defaulting to 1 if no pass is owned.
+    Also awards the joined user (profile.scored_point += 80) directly.
     """
     if profile.referred_by:
         referrer_profile = profile.referred_by.profile
-        base_referral_points = 10
+        base_referral_points = 100
         multiplier = getattr(referrer_profile.current_pass, "point_power", 1)
         multiplied_points = base_referral_points * multiplier
         referrer_profile.scored_point += multiplied_points
         referrer_profile.save(update_fields=["scored_point"])
+        
+        # Award the joined user 80 points directly
+        profile.scored_point += 80
+        profile.save(update_fields=["scored_point"])

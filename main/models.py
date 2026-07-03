@@ -159,5 +159,20 @@ class BlockchainListenerState(models.Model):
         return f"{self.name} @ block {self.last_processed_block}"
 
 
+class TestnetApplication(models.Model):
+    community_name = models.CharField(max_length=200, blank=True, null=True)
+    platform = models.CharField(max_length=50, blank=True, null=True)
+    invite_link = models.CharField(max_length=500, blank=True, null=True)
+    member_count = models.CharField(max_length=50, blank=True, null=True)
+    wallet_address = models.CharField(max_length=42, unique=True, db_index=True)
+    email = models.EmailField(max_length=200, unique=True, db_index=True)
+    feedback = models.TextField(blank=True, null=True)
+    faucet_tx_hash = models.CharField(max_length=66, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"TestnetApp - {self.email} - {self.wallet_address}"
+
+
 
     
