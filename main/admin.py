@@ -13,7 +13,9 @@ admin.site.register([DigiUser, Profile, PassTransaction, TestnetApplication])
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ('title', 'points', 'task_type', 'is_active')
+    list_display = ('title', 'points', 'task_type', 'reset_interval', 'start_date', 'end_date', 'is_active')
+    list_filter = ('task_type', 'reset_interval', 'is_active')
+    search_fields = ('title', 'description')
 
 @admin.register(UserTaskCompletion)
 class UserTaskCompletionAdmin(admin.ModelAdmin):
