@@ -104,7 +104,7 @@ class LeaderboardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['wallet', 'names', 'scored_point', 'rank']
+        fields = ['wallet', 'names', 'scored_point', 'rank', 'avatar_url']
 
     def get_rank(self, obj):
         return self.context.get('rank', None)
