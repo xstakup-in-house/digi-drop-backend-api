@@ -120,6 +120,18 @@ class Task(models.Model):
     task_type = models.CharField(max_length=50, choices=[('on_site', 'On-Site'), ('off_site', 'Off-Site')])  # e.g., 'complete_profile', 'follow_instagram'
     external_link = models.URLField(blank=True, null=True)  # For off-site, e.g., Instagram URL
     is_active = models.BooleanField(default=True)
+    start_date = models.DateField(null=True, blank=True, help_text="The date this quest becomes visible.")
+    end_date = models.DateField(null=True, blank=True, help_text="The date this quest expires.")
+    reset_interval = models.CharField(
+        max_length=20,
+        choices=[
+            ('one_time', 'One-Time'),
+            ('daily', 'Daily'),
+            ('weekly', 'Weekly'),
+        ],
+        default='one_time',
+        help_text="How often this task can be repeated."
+    )
 
     def __str__(self):
         return self.title
@@ -141,7 +153,7 @@ class UserTaskCompletion(models.Model):
     awarded_points = models.PositiveIntegerField(default=0)  # Snapshot of points at completion
 
     class Meta:
-        unique_together = ('user', 'task')  # Prevent duplicates
+        pass
 
     def __str__(self):
         return f"{self.user} completed {self.task}"

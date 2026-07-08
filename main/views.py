@@ -318,55 +318,121 @@ class TaskListView(generics.ListAPIView):
     serializer_class = TaskSerializer
 
     def get_queryset(self):
-        # Only incomplete, active tasks for user
+        from django.db import models
+        from django.utils import timezone
+        from datetime import date, timedelta
         
-        completed_tasks = UserTaskCompletion.objects.filter(
-            user=self.request.user, status=UserTaskCompletion.Status.COMPLETED
-        ).values_list('task_id', flat=True)
-        return Task.objects.filter(is_active=True).exclude(id__in=completed_tasks)
-    
+        today = timezone.now().date()
+        user = self.request.user
+
+        # Fetch all tasks that are active and fit within the scheduled date range
+        all_active_tasks = Task.objects.filter(is_active=True).filter(
+            models.Q(start_date__isnull=True) | models.Q(start_date__lte=today)
+        ).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gte=today)
+        )
+
+        visible_tasks = []
+        for task in all_active_tasks:
+            # Check completions for this task
+            completions = UserTaskCompletion.objects.filter(
+                user=user, 
+                task=task, 
+                status=UserTaskCompletion.Status.COMPLETED
+            )
+
+            if task.reset_interval == 'one_time':
+                # If they have completed it once, hide it
+                if not completions.exists():
+                    visible_tasks.append(task.id)
+            elif task.reset_interval == 'daily':
+                # If they completed it today, hide it. Otherwise show it.
+                if not completions.filter(completed_at__date=today).exists():
+                    visible_tasks.append(task.id)
+            elif task.reset_interval == 'weekly':
+                # If they completed it in the last 7 days, hide it. Otherwise show it.
+                seven_days_ago = timezone.now() - timedelta(days=7)
+                if not completions.filter(completed_at__gte=seven_days_ago).exists():
+                    visible_tasks.append(task.id)
+
+        return Task.objects.filter(id__in=visible_tasks)
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
-    
+
 
 class StartTaskView(views.APIView):
     permission_classes = [HasPassPermission]
 
     def post(self, request, task_id):
+        from django.utils import timezone
+        today = timezone.now().date()
+        
         task = get_object_or_404(Task, id=task_id, is_active=True)
+        
+        # Verify task is currently active based on start_date and end_date
+        if task.start_date and task.start_date > today:
+            return response.Response({"error": "Task is not active yet."}, status=400)
+        if task.end_date and task.end_date < today:
+            return response.Response({"error": "Task has expired."}, status=400)
 
-        user_task, created = UserTaskCompletion.objects.get_or_create(
+        # Get or create completion record. For daily/weekly tasks, we allow starting a new record if the previous ones are completed.
+        # Find if there is an active (started but not completed) completion
+        user_task = UserTaskCompletion.objects.filter(
             user=request.user,
-            task=task
-        )
+            task=task,
+            status=UserTaskCompletion.Status.STARTED
+        ).first()
 
-        if user_task.status == UserTaskCompletion.Status.COMPLETED:
-            return response.Response(
-                {"error": "Task already completed"},
-                status=400
+        if not user_task:
+            # Check if one_time task is already completed
+            completed_exists = UserTaskCompletion.objects.filter(
+                user=request.user,
+                task=task,
+                status=UserTaskCompletion.Status.COMPLETED
+            ).exists()
+
+            if task.reset_interval == 'one_time' and completed_exists:
+                return response.Response({"error": "Task already completed"}, status=400)
+            
+            # For daily/weekly, check if completed within the limit
+            if task.reset_interval == 'daily' and UserTaskCompletion.objects.filter(user=request.user, task=task, status=UserTaskCompletion.Status.COMPLETED, completed_at__date=today).exists():
+                return response.Response({"error": "Task already completed today"}, status=400)
+
+            # Create a fresh completion record
+            user_task = UserTaskCompletion.objects.create(
+                user=request.user,
+                task=task,
+                status=UserTaskCompletion.Status.STARTED,
+                started_at=timezone.now()
             )
-
-        user_task.status = UserTaskCompletion.Status.STARTED
-        user_task.started_at = timezone.now()
-        user_task.save()
+        else:
+            # Re-save status to confirm started state
+            user_task.status = UserTaskCompletion.Status.STARTED
+            user_task.started_at = timezone.now()
+            user_task.save()
 
         return response.Response({
             "task_type": task.task_type,
             "external_link": task.external_link
         }, status=status.HTTP_200_OK)
 
-   
 
 class CompleteTaskView(views.APIView):
     permission_classes = [HasPassPermission]
 
     def post(self, request, task_id):
-        user_task = get_object_or_404(UserTaskCompletion, user=request.user, task_id=task_id)
+        # Retrieve the currently started task completion for this user
+        user_task = UserTaskCompletion.objects.filter(
+            user=request.user, 
+            task_id=task_id, 
+            status=UserTaskCompletion.Status.STARTED
+        ).first()
 
-        if user_task.status != UserTaskCompletion.Status.STARTED:
-            return response.Response({"error": "Task not started"},status=400)
+        if not user_task:
+            return response.Response({"error": "Task not started"}, status=400)
 
         # Award points
         profile = request.user.profile
