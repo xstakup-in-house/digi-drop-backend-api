@@ -19,7 +19,7 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ["134.122.104.30", ".digidrops.xyz", "localhost", "127.0.0.1"]
 
@@ -76,6 +76,8 @@ WSGI_APPLICATION = 'digi_drop.wsgi.application'
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://digidrops.xyz",
+    "https://www.digidrops.xyz",
+    "https://testnet.digidrops.xyz",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
@@ -175,11 +177,12 @@ REDOC_SETTINGS = {
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'sandbox.smtp.mailtrap.io'
-EMAIL_HOST_USER = '2207c607ad7269'
-EMAIL_HOST_PASSWORD = '0f1ac2da5bbaf9'
-EMAIL_PORT = '2525'
-DEFAULT_FROM_EMAIL="support@digidrop.com"
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.resend.com')
+EMAIL_PORT = env('EMAIL_PORT', default='587')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='resend')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='welcome@testnet.digidrops.xyz')
+RESEND_API_KEY = env('EMAIL_HOST_PASSWORD', default='')
 
 
 SITE_ID=1

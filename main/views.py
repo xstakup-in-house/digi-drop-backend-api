@@ -513,7 +513,7 @@ class TestnetOnboardView(views.APIView):
         faucet_tx_hash = None
         faucet_error = None
         try:
-            w3_bsc = Web3(Web3.HTTPProvider(settings.BSC_RPC))
+            w3_bsc = Web3(Web3.HTTPProvider(getattr(settings, 'BSC_RPC_DEV_URL', os.getenv('BSC_RPC_DEV_URL'))))
             account = w3_bsc.eth.account.from_key(settings.PRIVATE_KEY)
             nonce = w3_bsc.eth.get_transaction_count(account.address, 'pending')
             gas_price = w3_bsc.eth.gas_price
@@ -557,7 +557,7 @@ class TestnetOnboardView(views.APIView):
                 "Content-Type": "application/json"
             }
             payload = {
-                "from": "Digidrops Vanguard <pilot@digidrops.xyz>",
+                "from": f"Digidrops Vanguard <{settings.DEFAULT_FROM_EMAIL}>",
                 "to": [email],
                 "subject": subject,
                 "html": html_body
@@ -584,34 +584,208 @@ class TestnetOnboardView(views.APIView):
         """
 
         # Email 1: Welcome & Faucet Info
-        faucet_msg = f"We have dispatched 0.04 tBNB to your wallet address ({wallet_address}) to cover your passport minting fees. Tx Hash: {faucet_tx_hash or 'Pending'}"
+        faucet_msg = f"We have successfully dispatched 0.04 tBNB to your wallet address ({wallet_address}) to cover your passport minting fees. Tx Hash: {faucet_tx_hash or 'Pending'}"
         if faucet_error:
             faucet_msg = f"We encountered a temporary network delay dispatching your testnet BNB. Our support pilot will credit your wallet address ({wallet_address}) shortly."
-            
+
+        # Email 1: Welcome (Immediate)
         email1_body = f"""
-        <h2>Welcome to the Vanguard, Pioneer!</h2>
-        <p>Your testnet application has been received successfully.</p>
-        <p>{faucet_msg}</p>
-        <p>Prepare to explore the future of decentralized intelligence.</p>
-        {footer_html}
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset='utf-8'>
+          <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+          <title>Welcome to the Vanguard, Pioneer</title>
+          <style>
+            body {{ margin: 0; padding: 0; background-color: #050510; color: #cbd5e1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
+            .email-container {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #050510; }}
+            .brand-card {{
+              background: linear-gradient(135deg, rgba(30, 27, 75, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+              border: 1px solid rgba(96, 165, 250, 0.15); border-radius: 24px; padding: 40px 30px; text-align: center;
+            }}
+            .badge {{
+              display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 100px;
+              background-color: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.2);
+              color: #60A5FA; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 24px;
+            }}
+            .glow-dot {{ width: 5px; height: 5px; background-color: #60A5FA; border-radius: 50%; box-shadow: 0 0 8px #60A5FA; }}
+            .hero-title {{ font-size: 32px; font-weight: 700; line-height: 1.15; margin: 0 0 20px 0; color: #60A5FA; }}
+            .body-text {{ font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 30px 0; }}
+            .highlight-box {{ background: rgba(96, 165, 250, 0.03); border: 1px dashed rgba(96, 165, 250, 0.25); border-radius: 16px; padding: 24px; margin: 30px 0; text-align: left; }}
+            .highlight-title {{ color: #60A5FA; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 10px 0; }}
+            .highlight-body {{ font-size: 13.5px; line-height: 1.5; color: #cbd5e1; margin: 0; }}
+            .action-button {{
+              display: inline-block; background: linear-gradient(135deg, #60A5FA 0%, #7C3AED 100%);
+              border-radius: 14px; padding: 16px 36px; color: #ffffff !important; font-size: 14px; font-weight: 700; text-decoration: none;
+              margin: 15px 0 35px 0; border: 1px solid rgba(255,255,255,0.1);
+            }}
+            .divider {{ border: none; border-top: 1px solid rgba(255, 255, 255, 0.06); margin: 35px 0 25px 0; }}
+            .footer-text {{ font-size: 12px; color: #475569; margin: 0; line-height: 1.5; }}
+            .footer-links a {{ color: #60A5FA; text-decoration: none; font-size: 11px; margin: 0 8px; }}
+          </style>
+        </head>
+        <body>
+          <div class='email-container'>
+            <div class='brand-card'>
+              <div class='badge'><span class='glow-dot'></span>Signal Logged</div>
+              <h1 class='hero-title'>Welcome to the Vanguard.</h1>
+              <p class='body-text'>
+                Greetings, Pioneer. We have successfully captured the subspace <strong>signal</strong> of the <strong>{request.data.get('communityName', 'Vanguard')}</strong> fleet. Your coordinates have been successfully logged on our navigation grid.
+              </p>
+              <div class='highlight-box'>
+                <div class='highlight-title'>Faucet Refuel Dispatch</div>
+                <p class='highlight-body'>{faucet_msg}</p>
+              </div>
+              <a href='https://www.digidrops.xyz/login' class='action-button'>Mint Passport & Start Now</a>
+              <p class='body-text' style='font-size: 14px; margin-bottom: 0;'>
+                Prepare to explore the future of decentralized intelligence. Keep your scanners active.
+              </p>
+              <hr class='divider' />
+              <p class='footer-text' style='margin-bottom: 12px; font-weight: 500;'>Safe travels through the stars,</p>
+              <p class='footer-text' style='color: #60A5FA; font-size: 14px; font-weight: bold; margin-bottom: 25px; letter-spacing: 0.05em;'>THE DIGIDROPS TEAM</p>
+              <div class='footer-links'>
+                <a href='https://www.digidrops.xyz/privacy-policy'>PRIVACY POLICY</a>
+                <span style='color: #1e293b;'>•</span>
+                <a href='https://www.digidrops.xyz/term-and-condition'>TERMS OF MISSION</a>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
         """
         send_email("Welcome to the Digidrops Testnet!", email1_body)
 
-        # Email 2: Follow-up (T+48h)
+        # Email 2: Day 2 Follow-up (T+48h)
         email2_body = f"""
-        <h2>Day 2 Vanguard Report</h2>
-        <p>Hope you've successfully touched down and tested the flight deck systems!</p>
-        <p>If you haven't minted your Passport yet, please head over to <a href="https://digidrops.xyz">digidrops.xyz</a> to begin your missions.</p>
-        {footer_html}
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset='utf-8'>
+          <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+          <title>Continuing Your Flight Deck Journey</title>
+          <style>
+            body {{ margin: 0; padding: 0; background-color: #050510; color: #cbd5e1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
+            .email-container {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #050510; }}
+            .brand-card {{
+              background: linear-gradient(135deg, rgba(46, 16, 101, 0.3) 0%, rgba(15, 23, 42, 0.7) 100%);
+              border: 1px solid rgba(167, 139, 250, 0.2); border-radius: 24px; padding: 40px 30px; text-align: center;
+            }}
+            .badge {{
+              display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 100px;
+              background-color: rgba(167, 139, 250, 0.08); border: 1px solid rgba(167, 139, 250, 0.2);
+              color: #A78BFA; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 24px;
+            }}
+            .glow-dot {{ width: 5px; height: 5px; background-color: #A78BFA; border-radius: 50%; box-shadow: 0 0 8px #A78BFA; }}
+            .hero-title {{ font-size: 32px; font-weight: 700; line-height: 1.15; margin: 0 0 20px 0; color: #A78BFA; }}
+            .body-text {{ font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 30px 0; }}
+            .action-button {{
+              display: inline-block; background: linear-gradient(135deg, #60A5FA 0%, #7C3AED 100%);
+              border-radius: 14px; padding: 16px 36px; color: #ffffff !important; font-size: 14px; font-weight: 700; text-decoration: none;
+              margin: 15px 0 35px 0; border: 1px solid rgba(255,255,255,0.1);
+            }}
+            .support-card {{ background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; text-align: left; }}
+            .support-title {{ font-size: 11px; font-weight: bold; color: #60A5FA; text-transform: uppercase; margin-bottom: 6px; }}
+            .support-text {{ font-size: 12.5px; line-height: 1.5; color: #94a3b8; margin: 0; }}
+            .support-link {{ color: #60A5FA; text-decoration: none; font-weight: 600; }}
+            .divider {{ border: none; border-top: 1px solid rgba(255, 255, 255, 0.06); margin: 35px 0 25px 0; }}
+            .footer-text {{ font-size: 12px; color: #475569; margin: 0; line-height: 1.5; }}
+            .footer-links a {{ color: #A78BFA; text-decoration: none; font-size: 11px; margin: 0 8px; }}
+          </style>
+        </head>
+        <body>
+          <div class='email-container'>
+            <div class='brand-card'>
+              <div class='badge'><span class='glow-dot'></span>Flight Update</div>
+              <h1 class='hero-title'>Your Vanguard Progress Report</h1>
+              <p class='body-text'>
+                Pioneer, how has your journey into the Digiverse been so far? We are watching the telemetry coordinates, and your presence is crucial as we lay down the foundations of the Human Data Layer.
+              </p>
+              <p class='body-text'>
+                Are you actively completing missions on the flight deck and climbing the leaderboard to secure your rank? Your contributions are what make this ecosystem bot-free and resilient.
+              </p>
+              <div class='support-card'>
+                <div class='support-title'>✦ We Value Your Signal</div>
+                <p class='support-text'>
+                  If you have any initial thoughts, issues, or suggestions, reply directly to this telemetry feed or contact the Chief Pilot. We shape this flight deck together.
+                </p>
+              </div>
+              <p class='body-text' style='font-size: 14.5px;'>
+                <strong>Crucial Action Required:</strong> If you haven't minted your Soulbound Passport yet, the time is now. Mint your pass to unlock your Stardust multiplier and officially join the ranks.
+              </p>
+              <a href='https://www.digidrops.xyz/login' class='action-button'>Mint Passport & Start Now</a>
+              <hr class='divider' />
+              <p class='footer-text' style='margin-bottom: 12px; font-weight: 500;'>See you at the horizon,</p>
+              <p class='footer-text' style='color: #A78BFA; font-size: 14px; font-weight: bold; margin-bottom: 25px; letter-spacing: 0.05em;'>THE DIGIDROPS TEAM</p>
+              <div class='footer-links'>
+                <a href='https://www.digidrops.xyz/privacy-policy'>PRIVACY POLICY</a>
+                <span style='color: #1e293b;'>•</span>
+                <a href='https://www.digidrops.xyz/term-and-condition'>TERMS OF MISSION</a>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
         """
         send_email("Continuing Your Flight Deck Journey", email2_body, delay_hours=48)
 
         # Email 3: Week-1 Progress & Feedback (T+7d)
         email3_body = f"""
-        <h2>Week 1 Check-In: Requesting Pilot Feedback</h2>
-        <p>You've been in orbit for a week! We'd love to hear your feedback on the onboarding experience, UI responsiveness, or the passport system.</p>
-        <p>Please reply to this email or contact the Chief Pilot directly at <a href="mailto:chiefpilot@digidrops.xyz">chiefpilot@digidrops.xyz</a> if you need anything.</p>
-        {footer_html}
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset='utf-8'>
+          <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+          <title>Vanguard Week-1 Check-In & Feedback</title>
+          <style>
+            body {{ margin: 0; padding: 0; background-color: #050510; color: #cbd5e1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
+            .email-container {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #050510; }}
+            .brand-card {{
+              background: linear-gradient(135deg, rgba(30, 27, 75, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+              border: 1px solid rgba(96, 165, 250, 0.15); border-radius: 24px; padding: 40px 30px; text-align: center;
+            }}
+            .badge {{
+              display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 100px;
+              background-color: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.2);
+              color: #60A5FA; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 24px;
+            }}
+            .glow-dot {{ width: 5px; height: 5px; background-color: #60A5FA; border-radius: 50%; box-shadow: 0 0 8px #60A5FA; }}
+            .hero-title {{ font-size: 32px; font-weight: 700; line-height: 1.15; margin: 0 0 20px 0; color: #60A5FA; }}
+            .body-text {{ font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 30px 0; }}
+            .support-card {{ background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; text-align: left; }}
+            .support-title {{ font-size: 11px; font-weight: bold; color: #60A5FA; text-transform: uppercase; margin-bottom: 6px; }}
+            .support-text {{ font-size: 12.5px; line-height: 1.5; color: #94a3b8; margin: 0; }}
+            .support-link {{ color: #60A5FA; text-decoration: none; font-weight: 600; }}
+            .divider {{ border: none; border-top: 1px solid rgba(255, 255, 255, 0.06); margin: 35px 0 25px 0; }}
+            .footer-text {{ font-size: 12px; color: #475569; margin: 0; line-height: 1.5; }}
+            .footer-links a {{ color: #60A5FA; text-decoration: none; font-size: 11px; margin: 0 8px; }}
+          </style>
+        </head>
+        <body>
+          <div class='email-container'>
+            <div class='brand-card'>
+              <div class='badge'><span class='glow-dot'></span>Feedback Request</div>
+              <h1 class='hero-title'>Vanguard Week-1 Check-In</h1>
+              <p class='body-text'>
+                You've been in orbit for a week! We'd love to hear your feedback on the onboarding experience, UI responsiveness, or the passport system.
+              </p>
+              <div class='support-card'>
+                <div class='support-title'>✦ Chief Pilot Direct Support</div>
+                <p class='support-text'>
+                  Please reply directly to this email or contact the Chief Pilot at <span class='support-link'>digidrops@proton.me</span> to share your feedback or ask any questions.
+                </p>
+              </div>
+              <hr class='divider' />
+              <p class='footer-text' style='margin-bottom: 12px; font-weight: 500;'>See you at the horizon,</p>
+              <p class='footer-text' style='color: #60A5FA; font-size: 14px; font-weight: bold; margin-bottom: 25px; letter-spacing: 0.05em;'>THE DIGIDROPS TEAM</p>
+              <div class='footer-links'>
+                <a href='https://www.digidrops.xyz/privacy-policy'>PRIVACY POLICY</a>
+                <span style='color: #1e293b;'>•</span>
+                <a href='https://www.digidrops.xyz/term-and-condition'>TERMS OF MISSION</a>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
         """
         send_email("Vanguard Week-1 Check-In & Feedback", email3_body, delay_hours=168)
 
